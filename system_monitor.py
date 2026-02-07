@@ -34,7 +34,7 @@ class SystemMonitor:
         self.prev_net_time: float | None = None
         self.cpu_temp_available = self._get_cpu_temperature() is not None
         self.state_file = Path(state_file).expanduser() if state_file else Path.home() / ".system_monitor_state.json"
-        self.discovery_payload = self._gen2erate_discovery_payload()
+        self.discovery_payload = self._generate_discovery_payload()
 
     def _get_cpu_temperature(self) -> float | None:
         try:
