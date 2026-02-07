@@ -102,6 +102,7 @@ class SystemMonitor:
             })
 
             if self.cpu_temp_available:
+                logger.info("CPU temperature sensor is available, adding to discovery") 
                 cmps.update({
                     "cpu_temp": {
                         "p": "sensor",
@@ -115,6 +116,7 @@ class SystemMonitor:
                     }
                 })
             else:
+                logger.info("CPU temperature sensor is not available, adding to discovery but disabled by default")
                 cmps.update({
                     "cpu_temp": {
                         "p": "sensor",
