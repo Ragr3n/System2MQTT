@@ -225,14 +225,14 @@ class SystemMonitor:
                 "icon": "mdi:harddisk",
                 "value_template": f"{{{{ value_json.disk_used_{mount_safe} }}}}"
             }
-            sensors[f"disk_free_{mount_safe}"] = {
+            sensors[f"disk_total_{mount_safe}"] = {
                 "p": "sensor",
-                "name": f"Disk {mountpoint} Free",
-                "unique_id": f"{self.device_id}_disk_free_{mount_safe}",
+                "name": f"Disk {mountpoint} Total",
+                "unique_id": f"{self.device_id}_disk_total_{mount_safe}",
                 "unit_of_measurement": "GB",
                 "state_class": "measurement",
                 "icon": "mdi:harddisk",
-                "value_template": f"{{{{ value_json.disk_free_{mount_safe} }}}}"
+                "value_template": f"{{{{ value_json.disk_total_{mount_safe} }}}}"
             }
         return sensors
 
@@ -332,7 +332,7 @@ class SystemMonitor:
                     
                     state_payload[f"disk_usage_{mount_safe}"] = round(disk.percent, 1)
                     state_payload[f"disk_used_{mount_safe}"] = round(disk.used / (1024**3), 2)
-                    state_payload[f"disk_free_{mount_safe}"] = round(disk.free / (1024**3), 2)
+                    state_payload[f"disk_total_{mount_safe}"] = round(disk.total / (1024**3), 2)
                 except (OSError, ValueError) as e:
                     self.logger.warning(f"Could not read disk usage for {mountpoint}: {e}")
 
