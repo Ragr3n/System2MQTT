@@ -1,7 +1,20 @@
-{ config, lib, pkgs, self, ... }:
+{ config, lib, pkgs, self ? null, ... }:
 
 let
   cfg = config.services.system-monitor;
+  defaultPackage = if self != null then
+    self.packages.${pkgs.system}.system-monitor
+  else
+    pkgs.stdenvNoCC.mkDerivation {
+      pname = "system-monitor";
+      version = "1.0.1";
+      src = ./.;
+      dontBuild = true;
+      installPhase = ''
+        mkdir -p $out/share/system-monitor
+        cp ${./system_monitor.py} $out/share/system-monitor/system_monitor.py
+      '';
+    };
   pythonEnv = pkgs.python3.withPackages (ps: [
     ps.psutil
     ps.paho-mqtt
@@ -16,7 +29,7 @@ in {
 
     package = mkOption {
       type = types.package;
-      default = self.packages.${pkgs.system}.system-monitor;
+      default = defaultPackage;
       description = "Package providing system_monitor.py";
     };
 

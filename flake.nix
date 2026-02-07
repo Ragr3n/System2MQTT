@@ -37,6 +37,6 @@
           };
         }
       ) // {
-        nixosModules.system-monitor = import ./module.nix { inherit self; };
+        nixosModules.system-monitor = import ./module.nix;
       };
 }
