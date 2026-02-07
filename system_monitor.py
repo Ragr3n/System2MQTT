@@ -114,7 +114,20 @@ class SystemMonitor:
                         "value_template": "{{ value_json.cpu_temperature }}"
                     }
                 })
-        
+            else:
+                cmps.update({
+                    "cpu_temp": {
+                        "p": "sensor",
+                        "name": "CPU Temperature",
+                        "unique_id": f"{self.device_id}_cpu_temp",
+                        "unit_of_measurement": "°C",
+                        "device_class": "temperature",
+                        "state_class": "measurement",
+                        "icon": "mdi:thermometer",
+                        "value_template": "{{ value_json.cpu_temperature }}",
+                        "enabled_by_default": false
+                    }
+                })        
         if self.disk_mountpoints:
             print(f"Adding disk sensors for mountpoints: {self.disk_mountpoints}")
             cmps.update(self._generate_disk_sensors())
