@@ -125,7 +125,7 @@ class SystemMonitor:
                         "state_class": "measurement",
                         "icon": "mdi:thermometer",
                         "value_template": "{{ value_json.cpu_temperature }}",
-                        "enabled_by_default": false
+                        "enabled_by_default": False
                     }
                 })        
         if self.disk_mountpoints:
