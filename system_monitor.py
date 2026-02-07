@@ -32,8 +32,21 @@ class SystemMonitor:
         self.state_topic = f"{self.base_topic}/state"
         self.prev_net_io: Dict[str, Any] = {}
         self.prev_net_time: float | None = None
+        self.cpu_temp_available = self._get_cpu_temperature() is not None
         self.state_file = Path(state_file).expanduser() if state_file else Path.home() / ".system_monitor_state.json"
         self.discovery_payload = self._generate_discovery_payload()
+
+    def _get_cpu_temperature(self) -> float | None:
+        try:
+            temps = psutil.sensors_temperatures()
+            if not temps:
+                return None
+            for entries in temps.values():
+                if entries:
+                    return round(entries[0].current, 1)
+        except (AttributeError, KeyError, IndexError):
+            return None
+        return None
 
     def _generate_discovery_payload(self) -> Dict[str, Dict[str, Any]]:
         # Build cmps dynamically based on configuration
@@ -77,16 +90,6 @@ class SystemMonitor:
                     "icon": "mdi:memory",
                     "value_template": "{{ value_json.memory_total }}"
                 },
-                "cpu_temp": {
-                    "p": "sensor",
-                    "name": "CPU Temperature",
-                    "unique_id": f"{self.device_id}_cpu_temp",
-                    "unit_of_measurement": "°C",
-                    "device_class": "temperature",
-                    "state_class": "measurement",
-                    "icon": "mdi:thermometer",
-                    "value_template": "{{ value_json.cpu_temperature }}"
-                },
                 "uptime": {
                     "p": "sensor",
                     "name": "Uptime",
@@ -97,6 +100,20 @@ class SystemMonitor:
                     "value_template": "{{ value_json.uptime_seconds }}"
                 },
             })
+
+            if self.cpu_temp_available:
+                cmps.update({
+                    "cpu_temp": {
+                        "p": "sensor",
+                        "name": "CPU Temperature",
+                        "unique_id": f"{self.device_id}_cpu_temp",
+                        "unit_of_measurement": "°C",
+                        "device_class": "temperature",
+                        "state_class": "measurement",
+                        "icon": "mdi:thermometer",
+                        "value_template": "{{ value_json.cpu_temperature }}"
+                    }
+                })
         
         if self.disk_mountpoints:
             print(f"Adding disk sensors for mountpoints: {self.disk_mountpoints}")
@@ -302,16 +319,7 @@ class SystemMonitor:
             memory_used_gb = round(memory.used / (1024**3), 2)
             memory_total_gb = round(memory.total / (1024**3), 2)
             uptime_seconds = int(time.time() - psutil.boot_time())
-            cpu_temperature = None
-            try:
-                temps = psutil.sensors_temperatures()
-                if temps:
-                    for entries in temps.values():
-                        if entries:
-                            cpu_temperature = round(entries[0].current, 1)
-                            break
-            except (AttributeError, KeyError, IndexError):
-                cpu_temperature = None
+            cpu_temperature = self._get_cpu_temperature()
             state_payload = state_payload | {
                 "cpu_usage": cpu_usage,
                 "memory_usage": memory_usage,
