@@ -1,4 +1,5 @@
 import socket
+import platform
 import paho.mqtt.client as mqtt
 import json
 import psutil
@@ -22,6 +23,9 @@ class SystemMonitor:
         self.net_interfaces = net_interfaces
         self.services = services
         self.hostname = socket.gethostname()
+        self.os_model = self._get_distro_name()
+        self.virtualization = self._get_virtualization_type()
+        self.device_model = self._get_device_model()
         # Initialize CPU percent to avoid blocking on first call
         if self.use_defaults:
             psutil.cpu_percent(interval=1)
@@ -47,6 +51,61 @@ class SystemMonitor:
         except (AttributeError, KeyError, IndexError):
             return None
         return None
+
+    def _get_distro_name(self) -> str:
+        try:
+            data = platform.freedesktop_os_release()
+            if data.get("PRETTY_NAME"):
+                return data["PRETTY_NAME"]
+            if data.get("NAME"):
+                return data["NAME"]
+        except (OSError, AttributeError):
+            pass
+        return f"{platform.system()} {platform.release()}"
+
+    def _get_virtualization_type(self) -> str | None:
+        try:
+            result = subprocess.run(
+                ["systemd-detect-virt"],
+                capture_output=True,
+                text=True,
+                timeout=3
+            )
+            if result.returncode == 0:
+                virt = result.stdout.strip()
+                return virt if virt else None
+        except (subprocess.SubprocessError, FileNotFoundError):
+            pass
+
+        dmi_paths = [
+            "/sys/class/dmi/id/product_name",
+            "/sys/class/dmi/id/sys_vendor",
+            "/sys/class/dmi/id/board_vendor",
+        ]
+        for path in dmi_paths:
+            try:
+                with open(path, "r", encoding="utf-8") as handle:
+                    value = handle.read().strip().lower()
+                if any(token in value for token in [
+                    "kvm",
+                    "qemu",
+                    "vmware",
+                    "virtualbox",
+                    "xen",
+                    "hyper-v",
+                    "openstack",
+                    "bhyve",
+                ]):
+                    return value
+            except OSError:
+                continue
+
+        return None
+
+    def _get_device_model(self) -> str:
+        if self.virtualization:
+            return f"{self.os_model} (virtual: {self.virtualization})"
+        return self.os_model
 
     def _generate_discovery_payload(self) -> Dict[str, Dict[str, Any]]:
         # Build cmps dynamically based on configuration
@@ -102,7 +161,7 @@ class SystemMonitor:
             })
 
             if self.cpu_temp_available:
-                self.logger.info("CPU temperature sensor is available, adding to discovery") 
+                self.logger.debug("CPU temperature sensor is available, adding to discovery")
                 cmps.update({
                     "cpu_temp": {
                         "p": "sensor",
@@ -116,7 +175,7 @@ class SystemMonitor:
                     }
                 })
             else:
-                self.logger.info("CPU temperature sensor is not available, adding to discovery but disabled by default")
+                self.logger.debug("CPU temperature sensor is not available, adding to discovery but disabled by default")
                 cmps.update({
                     "cpu_temp": {
                         "p": "sensor",
@@ -127,28 +186,29 @@ class SystemMonitor:
                         "state_class": "measurement",
                         "icon": "mdi:thermometer",
                         "value_template": "{{ value_json.cpu_temperature }}",
-                        "enabled_by_default": "false"
+                        "enabled_by_default": False
                     }
                 })        
         if self.disk_mountpoints:
-            print(f"Adding disk sensors for mountpoints: {self.disk_mountpoints}")
+            self.logger.debug(f"Adding disk sensors for mountpoints: {self.disk_mountpoints}")
             cmps.update(self._generate_disk_sensors())
 
         if self.net_interfaces:
-            print(f"Adding network sensors for interfaces: {self.net_interfaces}")
+            self.logger.debug(f"Adding network sensors for interfaces: {self.net_interfaces}")
             cmps.update(self._generate_network_sensors())
         
         if self.services:
-            print(f"Adding service sensors for: {self.services}")
+            self.logger.debug(f"Adding service sensors for: {self.services}")
             cmps.update(self._generate_service_sensors())
         
         discovery_payload = {
             "dev": {
                 "identifiers": [self.device_id],
                 "name": self.hostname,
-                "model": "System2MQTT", #Change to output from linux command
-                "manufacturer": "Ragr3n", # Change to Distro name
-                "sw_version": "1.0.1" # Change to kernel version or similar
+                "model": self.device_model,
+                "manufacturer": "System2MQTT",
+                "sw_version": f"{platform.system()} {platform.release()}",
+                "hw_version": platform.machine()
             },
             "o": {
                 "name": "system2mqtt",
@@ -158,7 +218,7 @@ class SystemMonitor:
             "cmps": cmps,
             "state_topic": self.state_topic,
             "availability_topic": self.availability_topic,
-            "qos": 1   
+            "qos": 1
         }
         return discovery_payload
 
