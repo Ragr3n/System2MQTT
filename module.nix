@@ -1,33 +1,33 @@
 { config, lib, pkgs, ... }:
 
 let
-  cfg = config.services.system-monitor;
+  cfg = config.services.system2mqtt;
   defaultPackage = pkgs.stdenvNoCC.mkDerivation {
-    pname = "system-monitor";
+    pname = "system2mqtt";
     version = "1.0.1";
     src = ./.;
     dontBuild = true;
     installPhase = ''
-      mkdir -p $out/share/system-monitor
-      cp ${./system_monitor.py} $out/share/system-monitor/system_monitor.py
+      mkdir -p $out/share/system2mqtt
+      cp ${./system2mqtt.py} $out/share/system2mqtt/system2mqtt.py
     '';
   };
   pythonEnv = pkgs.python3.withPackages (ps: [
     ps.psutil
     ps.paho-mqtt
   ]);
-  scriptPath = "${cfg.package}/share/system-monitor/system_monitor.py";
+  scriptPath = "${cfg.package}/share/system2mqtt/system2mqtt.py";
   diskArgs = lib.optionalString (cfg.mountpoints != []) "--disk-mountpoints ${lib.escapeShellArgs cfg.mountpoints}";
   netArgs = lib.optionalString (cfg.interfaces != []) "--net-interfaces ${lib.escapeShellArgs cfg.interfaces}";
   serviceArgs = lib.optionalString (cfg.services != []) "--services ${lib.escapeShellArgs cfg.services}";
 in {
-  options.services.system-monitor = with lib; {
-    enable = mkEnableOption "System Monitor MQTT publisher";
+  options.services.system2mqtt = with lib; {
+    enable = mkEnableOption "System2MQTT MQTT publisher";
 
     package = mkOption {
       type = types.package;
       default = defaultPackage;
-      description = "Package providing system_monitor.py";
+      description = "Package providing system2mqtt.py";
     };
 
     mqtt = mkOption {
@@ -100,19 +100,19 @@ in {
 
     stateFile = mkOption {
       type = types.str;
-      default = "/var/lib/system-monitor/state.json";
+      default = "/var/lib/system2mqtt/state.json";
       description = "Path to discovery state file";
     };
 
     user = mkOption {
       type = types.str;
-      default = "system-monitor";
+      default = "system2mqtt";
       description = "User to run the service";
     };
 
     group = mkOption {
       type = types.str;
-      default = "system-monitor";
+      default = "system2mqtt";
       description = "Group to run the service";
     };
 
@@ -128,7 +128,7 @@ in {
       ${cfg.user} = {
         isSystemUser = true;
         group = cfg.group;
-        description = "System Monitor service user";
+        description = "System2MQTT service user";
       };
     };
 
@@ -136,8 +136,8 @@ in {
       ${cfg.group} = {};
     };
 
-    systemd.services.system-monitor = {
-      description = "System Monitor MQTT publisher";
+    systemd.services.system2mqtt = {
+      description = "System2MQTT MQTT publisher";
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
@@ -147,7 +147,7 @@ in {
         User = cfg.user;
         Group = cfg.group;
         Restart = "on-failure";
-        StateDirectory = "system-monitor";
+        StateDirectory = "system2mqtt";
       } // lib.optionalAttrs (cfg.mqtt.passwordFile != null) {
         LoadCredential = "mqtt_password:${cfg.mqtt.passwordFile}";
       };

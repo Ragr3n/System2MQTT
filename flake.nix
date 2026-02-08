@@ -1,5 +1,5 @@
 {
-  description = "Linux system monitoring script with MQTT integration for Home Assistant";
+  description = "System2MQTT: Linux system monitoring script with MQTT integration for Home Assistant";
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   inputs.flake-utils.url = "github:numtide/flake-utils";
 
@@ -11,17 +11,17 @@
           pythonPackages = python.pkgs;
         in {
           packages = {
-            system-monitor = pkgs.stdenvNoCC.mkDerivation {
-              pname = "system-monitor";
+            system2mqtt = pkgs.stdenvNoCC.mkDerivation {
+              pname = "system2mqtt";
               version = "1.0.1";
               src = self;
               dontBuild = true;
               installPhase = ''
-                mkdir -p $out/share/system-monitor
-                cp ${./system_monitor.py} $out/share/system-monitor/system_monitor.py
+                mkdir -p $out/share/system2mqtt
+                cp ${./system_monitor.py} $out/share/system2mqtt/system_monitor.py
               '';
             };
-            default = self.packages.${system}.system-monitor;
+            default = self.packages.${system}.system2mqtt;
           };
 
           devShell = pkgs.mkShell {
@@ -37,6 +37,6 @@
           };
         }
       ) // {
-        nixosModules.system-monitor = import ./module.nix;
+        nixosModules.system2mqtt = import ./module.nix;
       };
 }

@@ -27,13 +27,13 @@ class SystemMonitor:
             psutil.cpu_percent(interval=1)
         self.discovery_prefix = "homeassistant"
         self.device_id = self.hostname.replace('.', '_').replace('-', '_')
-        self.base_topic = f"system_monitor/{self.device_id}"
+        self.base_topic = f"system2mqtt/{self.device_id}"
         self.availability_topic = f"{self.base_topic}/availability"
         self.state_topic = f"{self.base_topic}/state"
         self.prev_net_io: Dict[str, Any] = {}
         self.prev_net_time: float | None = None
         self.cpu_temp_available = self._get_cpu_temperature() is not None
-        self.state_file = Path(state_file).expanduser() if state_file else Path.home() / ".system_monitor_state.json"
+        self.state_file = Path(state_file).expanduser() if state_file else Path.home() / ".system2mqtt_state.json"
         self.discovery_payload = self._generate_discovery_payload()
 
     def _get_cpu_temperature(self) -> float | None:
@@ -146,14 +146,14 @@ class SystemMonitor:
             "dev": {
                 "identifiers": [self.device_id],
                 "name": self.hostname,
-                "model": "System Monitor", #Change to output from linux command
+                "model": "System2MQTT", #Change to output from linux command
                 "manufacturer": "Ragr3n", # Change to Distro name
                 "sw_version": "1.0.1" # Change to kernel version or similar
             },
             "o": {
-                "name": "system-monitor",
+                "name": "system2mqtt",
                 "sw": "1.0",
-                "url": "https://github.com/yourusername/system-monitor"
+                "url": "https://github.com/Ragr3n/System2MQTT"
             },
             "cmps": cmps,
             "state_topic": self.state_topic,
@@ -428,7 +428,7 @@ class SystemMonitor:
 
     def run(self) -> None:
         try:
-            self.client = mqtt.Client(client_id=f"system_monitor_{self.device_id}")
+            self.client = mqtt.Client(client_id=f"system2mqtt_{self.device_id}")
             self.client.will_set(self.availability_topic, "offline", retain=True)
             self.client.username_pw_set(self.mqtt_user, self.mqtt_pass)
             self.client.on_connect = self.on_connect
@@ -445,7 +445,7 @@ class SystemMonitor:
                 self.publish_states()
                 time.sleep(self.update_interval)
         except KeyboardInterrupt:
-            self.logger.info("Stopping system monitor...")
+            self.logger.info("Stopping System2MQTT...")
         except Exception as e:
             self.logger.error(f"Error in main loop: {e}")
         finally:
@@ -460,7 +460,7 @@ if __name__ == "__main__":
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
-    parser = argparse.ArgumentParser(description="System Monitor - MQTT publisher for Home Assistant")
+    parser = argparse.ArgumentParser(description="System2MQTT - MQTT publisher for Home Assistant")
     parser.add_argument("--host", default="localhost", help="MQTT broker host (default: localhost)")
     parser.add_argument("--port", type=int, default=1883, help="MQTT broker port (default: 1883)")
     parser.add_argument("--user", default="", help="MQTT username")
@@ -469,7 +469,7 @@ if __name__ == "__main__":
     parser.add_argument("--disk-mountpoints", type=str, nargs="+", default=[], help="Disk mountpoints to monitor (default: /)")
     parser.add_argument("--net-interfaces", type=str, nargs="+", default=[], help="Network interfaces to monitor (e.g. eth0 wlan0)")
     parser.add_argument("--services", type=str, nargs="+", default=[], help="Systemd services to monitor (e.g. nginx.service docker.service)")
-    parser.add_argument("--state-file", default="/var/lib/system-monitor/state.json", help="Path to discovery state file")
+    parser.add_argument("--state-file", default="/var/lib/system2mqtt/state.json", help="Path to discovery state file")
     parser.add_argument("--use-defaults", action="store_true", default=True, help="Enable defaults")
     args = parser.parse_args()
     
