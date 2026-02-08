@@ -104,8 +104,8 @@ class SystemMonitor:
 
     def _get_device_model(self) -> str:
         if self.virtualization:
-            return f"{self.os_model} (virtual: {self.virtualization})"
-        return self.os_model
+            return f"{platform.machine()} (virtual: {self.virtualization})"
+        return platform.machine()
 
     def _generate_discovery_payload(self) -> Dict[str, Dict[str, Any]]:
         # Build cmps dynamically based on configuration
@@ -205,10 +205,10 @@ class SystemMonitor:
             "dev": {
                 "identifiers": [self.device_id],
                 "name": self.hostname,
-                "model": self.device_model,
+                "model": self.os_model,
                 "manufacturer": "System2MQTT",
                 "sw_version": f"{platform.system()} {platform.release()}",
-                "hw_version": platform.machine()
+                "hw_version": self.device_model
             },
             "o": {
                 "name": "system2mqtt",
