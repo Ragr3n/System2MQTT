@@ -11,34 +11,47 @@ from pathlib import Path
 from typing import Dict, Any
 
 class SystemMonitor:
-    def __init__(self, mqtt_host: str, mqtt_port: int, mqtt_user: str, mqtt_pass: str, use_defaults: bool = True, update_interval: int = 30, disk_mountpoints: list | None = None, net_interfaces: list | None = None, services: list | None = None, state_file: str | None = None) -> None:
+    def __init__(self, mqtt_host: str, mqtt_port: int, mqtt_user: str, mqtt_pass: str, use_defaults: bool = True, update_interval: int = 30, mountpoints: list | None = None, interfaces: list | None = None, services: list | None = None, state_file: str | None = None) -> None:
+        # Initialize logger
         self.logger = logging.getLogger("SystemMonitor")
+        
+        # Args
         self.mqtt_host = mqtt_host
         self.mqtt_port = mqtt_port
         self.mqtt_user = mqtt_user
         self.mqtt_pass = mqtt_pass
         self.use_defaults = use_defaults
         self.update_interval = update_interval
-        self.disk_mountpoints = disk_mountpoints
-        self.net_interfaces = net_interfaces
+        self.mountpoints = mountpoints
+        self.interfaces = interfaces
         self.services = services
+        self.state_file = state_file
+
+        # Device info
         self.hostname = socket.gethostname()
-        self.os_model = self._get_distro_name()
-        self.virtualization = self._get_virtualization_type()
-        self.device_model = self._get_device_model()
-        # Initialize CPU percent to avoid blocking on first call
-        if self.use_defaults:
-            psutil.cpu_percent(interval=1)
-        self.discovery_prefix = "homeassistant"
         self.device_id = self.hostname.replace('.', '_').replace('-', '_')
+        self.distro = self._get_distro_name()
+        self.virtualization = self._get_virtualization_type()
+        self.sw_version = f"{platform.system()} {platform.release()}"
+        self.hw_version = self._get_hw_version()
+
+        # MQTT topics and discovery config
+        self.discovery_prefix = "homeassistant"
         self.base_topic = f"system2mqtt/{self.device_id}"
         self.availability_topic = f"{self.base_topic}/availability"
         self.state_topic = f"{self.base_topic}/state"
+        self.discovery_payload = self._generate_discovery_payload()
+
+        # Network I/O tracking for rate calculations
         self.prev_net_io: Dict[str, Any] = {}
         self.prev_net_time: float | None = None
+
+        # Check if CPU temperature sensor is available
         self.cpu_temp_available = self._get_cpu_temperature() is not None
-        self.state_file = Path(state_file).expanduser() if state_file else Path.home() / ".system2mqtt_state.json"
-        self.discovery_payload = self._generate_discovery_payload()
+        
+        # Initialize CPU percent to avoid blocking on first call
+        if self.use_defaults:
+            psutil.cpu_percent(interval=1)
 
     def _get_cpu_temperature(self) -> float | None:
         try:
@@ -102,7 +115,7 @@ class SystemMonitor:
 
         return None
 
-    def _get_device_model(self) -> str:
+    def _get_hw_version(self) -> str:
         if self.virtualization:
             return f"{platform.machine()} (virtual: {self.virtualization})"
         return platform.machine()
@@ -189,12 +202,12 @@ class SystemMonitor:
                         "enabled_by_default": False
                     }
                 })        
-        if self.disk_mountpoints:
-            self.logger.debug(f"Adding disk sensors for mountpoints: {self.disk_mountpoints}")
+        if self.mountpoints:
+            self.logger.debug(f"Adding disk sensors for mountpoints: {self.mountpoints}")
             cmps.update(self._generate_disk_sensors())
 
-        if self.net_interfaces:
-            self.logger.debug(f"Adding network sensors for interfaces: {self.net_interfaces}")
+        if self.interfaces:
+            self.logger.debug(f"Adding network sensors for interfaces: {self.interfaces}")
             cmps.update(self._generate_network_sensors())
         
         if self.services:
@@ -205,13 +218,13 @@ class SystemMonitor:
             "dev": {
                 "identifiers": [self.device_id],
                 "name": self.hostname,
-                "model": self.os_model,
+                "model": self.distro,
                 "manufacturer": "System2MQTT",
-                "sw_version": f"{platform.system()} {platform.release()}",
-                "hw_version": self.device_model
+                "sw_version": self.sw_version,
+                "hw_version": self.hw_version
             },
             "o": {
-                "name": "system2mqtt",
+                "name": "System2MQTT",
                 "sw": "1.0",
                 "url": "https://github.com/Ragr3n/System2MQTT"
             },
@@ -225,7 +238,7 @@ class SystemMonitor:
     def _generate_network_sensors(self) -> Dict[str, Dict[str, Any]]:
         """Generate network sensors for each configured interface."""
         sensors: Dict[str, Dict[str, Any]] = {}
-        for iface in self.net_interfaces:
+        for iface in self.interfaces:
             iface_safe = iface.replace('/', '_').replace('-', '_')
             if not iface_safe:
                 continue
@@ -293,7 +306,7 @@ class SystemMonitor:
     def _generate_disk_sensors(self) -> Dict[str, Dict[str, Any]]:
         """Generate disk sensors for each configured mountpoint."""
         sensors = {}
-        for mountpoint in self.disk_mountpoints:
+        for mountpoint in self.mountpoints:
             # Sanitize mountpoint name for unique_id
             mount_safe = mountpoint.replace('/', '_').strip('_')
             if not mount_safe:
@@ -404,9 +417,9 @@ class SystemMonitor:
             }
             if cpu_temperature is not None:
                 state_payload["cpu_temperature"] = cpu_temperature
-        if self.disk_mountpoints:    
+        if self.mountpoints:    
             # Collect disk metrics for each mountpoint
-            for mountpoint in self.disk_mountpoints:
+            for mountpoint in self.mountpoints:
                 try:
                     disk = psutil.disk_usage(mountpoint)
                     mount_safe = mountpoint.replace('/', '_').strip('_')
@@ -419,14 +432,14 @@ class SystemMonitor:
                 except (OSError, ValueError) as e:
                     self.logger.warning(f"Could not read disk usage for {mountpoint}: {e}")
 
-        if self.net_interfaces:
+        if self.interfaces:
             net_io = psutil.net_io_counters(pernic=True)
             current_time = time.time()
             time_delta = None
             if self.prev_net_time is not None:
                 time_delta = current_time - self.prev_net_time
 
-            for iface in self.net_interfaces:
+            for iface in self.interfaces:
                 if iface not in net_io:
                     self.logger.warning(f"Network interface not found: {iface}")
                     continue
@@ -526,8 +539,8 @@ if __name__ == "__main__":
     parser.add_argument("--user", default="", help="MQTT username")
     parser.add_argument("--pass", dest="password", default="", help="MQTT password")
     parser.add_argument("--interval", type=int, default=30, help="Update interval in seconds (default: 30)")
-    parser.add_argument("--disk-mountpoints", type=str, nargs="+", default=[], help="Disk mountpoints to monitor (default: /)")
-    parser.add_argument("--net-interfaces", type=str, nargs="+", default=[], help="Network interfaces to monitor (e.g. eth0 wlan0)")
+    parser.add_argument("--mountpoints", type=str, nargs="+", default=[], help="Disk mountpoints to monitor (default: /)")
+    parser.add_argument("--interfaces", type=str, nargs="+", default=[], help="Network interfaces to monitor (e.g. eth0 wlan0)")
     parser.add_argument("--services", type=str, nargs="+", default=[], help="Systemd services to monitor (e.g. nginx.service docker.service)")
     parser.add_argument("--state-file", default="/var/lib/system2mqtt/state.json", help="Path to discovery state file")
     parser.add_argument("--use-defaults", action="store_true", default=True, help="Enable defaults")
@@ -540,8 +553,8 @@ if __name__ == "__main__":
         mqtt_pass=args.password,
         use_defaults=args.use_defaults,
         update_interval=args.interval,
-        disk_mountpoints=args.disk_mountpoints,
-        net_interfaces=args.net_interfaces,
+        mountpoints=args.mountpoints,
+        interfaces=args.interfaces,
         services=args.services,
         state_file=args.state_file
     )

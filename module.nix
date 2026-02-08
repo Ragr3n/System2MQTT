@@ -17,8 +17,8 @@ let
     ps.paho-mqtt
   ]);
   scriptPath = "${cfg.package}/share/system2mqtt/system2mqtt.py";
-  diskArgs = lib.optionalString (cfg.mountpoints != []) "--disk-mountpoints ${lib.escapeShellArgs cfg.mountpoints}";
-  netArgs = lib.optionalString (cfg.interfaces != []) "--net-interfaces ${lib.escapeShellArgs cfg.interfaces}";
+  diskArgs = lib.optionalString (cfg.mountpoints != []) "--mountpoints ${lib.escapeShellArgs cfg.mountpoints}";
+  netArgs = lib.optionalString (cfg.interfaces != []) "--interfaces ${lib.escapeShellArgs cfg.interfaces}";
   serviceArgs = lib.optionalString (cfg.services != []) "--services ${lib.escapeShellArgs cfg.services}";
 in {
   options.services.system2mqtt = with lib; {
