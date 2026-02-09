@@ -25,7 +25,7 @@ class SystemMonitor:
         self.mountpoints = mountpoints
         self.interfaces = interfaces
         self.services = services
-        self.state_file = state_file
+        self.state_file = Path(state_file) if state_file else None
 
         # Device info
         self.hostname = socket.gethostname()
@@ -34,6 +34,9 @@ class SystemMonitor:
         self.virtualization = self._get_virtualization_type()
         self.sw_version = f"{platform.system()} {platform.release()}"
         self.hw_version = self._get_hw_version()
+
+        # Check if CPU temperature sensor is available
+        self.cpu_temp_available = self._get_cpu_temperature() is not None
 
         # MQTT topics and discovery config
         self.discovery_prefix = "homeassistant"
@@ -45,9 +48,6 @@ class SystemMonitor:
         # Network I/O tracking for rate calculations
         self.prev_net_io: Dict[str, Any] = {}
         self.prev_net_time: float | None = None
-
-        # Check if CPU temperature sensor is available
-        self.cpu_temp_available = self._get_cpu_temperature() is not None
         
         # Initialize CPU percent to avoid blocking on first call
         if self.use_defaults:
