@@ -7,11 +7,12 @@ import time
 import argparse
 import logging
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any
 
 class SystemMonitor:
-    def __init__(self, mqtt_host: str, mqtt_port: int, mqtt_user: str, mqtt_pass: str, use_defaults: bool = True, update_interval: int = 30, mountpoints: list | None = None, interfaces: list | None = None, services: list | None = None, state_file: str | None = None) -> None:
+    def __init__(self, mqtt_host: str, mqtt_port: int, mqtt_user: str, mqtt_pass: str, use_defaults: bool = True, update_interval: int = 30, mountpoints: list | None = None, interfaces: list | None = None, services: list | None = None, borgmatic_service: str | None = None, state_file: str | None = None) -> None:
         # Initialize logger
         self.logger = logging.getLogger("SystemMonitor")
         
@@ -25,6 +26,7 @@ class SystemMonitor:
         self.mountpoints = mountpoints
         self.interfaces = interfaces
         self.services = services
+        self.borgmatic_service = borgmatic_service
         self.state_file = Path(state_file) if state_file else None
 
         # Device info
@@ -213,6 +215,10 @@ class SystemMonitor:
         if self.services:
             self.logger.debug(f"Adding service sensors for: {self.services}")
             cmps.update(self._generate_service_sensors())
+
+        if self.borgmatic_service:
+            self.logger.debug(f"Adding borgmatic sensors for service: {self.borgmatic_service}")
+            cmps.update(self._generate_borgmatic_sensors())
         
         discovery_payload = {
             "dev": {
@@ -281,6 +287,32 @@ class SystemMonitor:
             }
 
         return sensors
+
+    def _generate_borgmatic_sensors(self) -> Dict[str, Dict[str, Any]]:
+        return {
+            "borgmatic_result": {
+                "p": "sensor",
+                "name": "Borgmatic Result",
+                "unique_id": f"{self.device_id}_borgmatic_result",
+                "icon": "mdi:archive-check",
+                "value_template": "{{ value_json.borgmatic_result }}"
+            },
+            "borgmatic_exit_code": {
+                "p": "sensor",
+                "name": "Borgmatic Exit Code",
+                "unique_id": f"{self.device_id}_borgmatic_exit_code",
+                "icon": "mdi:numeric",
+                "value_template": "{{ value_json.borgmatic_exit_code }}"
+            },
+            "borgmatic_last_run": {
+                "p": "sensor",
+                "name": "Borgmatic Last Run",
+                "unique_id": f"{self.device_id}_borgmatic_last_run",
+                "device_class": "timestamp",
+                "icon": "mdi:clock-check-outline",
+                "value_template": "{{ value_json.borgmatic_last_run }}"
+            }
+        }
     
     def _generate_service_sensors(self) -> Dict[str, Dict[str, Any]]:
         """Generate binary sensors for each configured systemd service."""
@@ -482,9 +514,75 @@ class SystemMonitor:
                     self.logger.warning(f"Could not check status for service {service}: {e}")
                     service_safe = service.replace('.', '_').replace('-', '_').replace('@', '_')
                     state_payload[f"service_{service_safe}"] = "unknown"
+
+        if self.borgmatic_service:
+            state_payload = state_payload | self._get_borgmatic_state()
         
         self.logger.debug(f"Publishing state: {state_payload}")
         self.client.publish(self.state_topic, json.dumps(state_payload))
+
+    def _get_borgmatic_state(self) -> Dict[str, Any]:
+        state = {
+            "borgmatic_result": "unknown",
+            "borgmatic_exit_code": -1,
+            "borgmatic_last_run": None,
+        }
+        try:
+            result = subprocess.run(
+                [
+                    "systemctl",
+                    "show",
+                    self.borgmatic_service,
+                    "--property",
+                    "Result",
+                    "--property",
+                    "ExecMainStatus",
+                    "--property",
+                    "InactiveEnterTimestampUSec",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+
+            if result.returncode != 0:
+                self.logger.warning(
+                    f"Could not read borgmatic service status for {self.borgmatic_service}: {result.stderr.strip()}"
+                )
+                return state
+
+            properties: Dict[str, str] = {}
+            for line in result.stdout.splitlines():
+                if "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                properties[key] = value
+
+            service_result = properties.get("Result", "")
+            state["borgmatic_result"] = service_result if service_result else "unknown"
+
+            exec_main_status = properties.get("ExecMainStatus", "")
+            try:
+                state["borgmatic_exit_code"] = int(exec_main_status) if exec_main_status else -1
+            except ValueError:
+                state["borgmatic_exit_code"] = -1
+
+            inactive_usec = properties.get("InactiveEnterTimestampUSec", "0")
+            try:
+                inactive_usec_value = int(inactive_usec)
+                if inactive_usec_value > 0:
+                    state["borgmatic_last_run"] = datetime.fromtimestamp(
+                        inactive_usec_value / 1_000_000,
+                        tz=timezone.utc,
+                    ).isoformat().replace("+00:00", "Z")
+            except ValueError:
+                state["borgmatic_last_run"] = None
+
+            return state
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError) as e:
+            self.logger.warning(f"Could not check borgmatic service {self.borgmatic_service}: {e}")
+            return state
 
     def on_connect(self, client: mqtt.Client, userdata: Any, flags: Dict[str, int], rc: int) -> None:
         if rc == 0:
@@ -542,6 +640,7 @@ if __name__ == "__main__":
     parser.add_argument("--mountpoints", type=str, nargs="+", default=[], help="Disk mountpoints to monitor (default: /)")
     parser.add_argument("--interfaces", type=str, nargs="+", default=[], help="Network interfaces to monitor (e.g. eth0 wlan0)")
     parser.add_argument("--services", type=str, nargs="+", default=[], help="Systemd services to monitor (e.g. nginx.service docker.service)")
+    parser.add_argument("--borgmatic-service", default=None, help="Systemd borgmatic service to monitor (e.g. borgmatic.service)")
     parser.add_argument("--state-file", default="/var/lib/system2mqtt/state.json", help="Path to discovery state file")
     parser.add_argument("--use-defaults", action="store_true", default=True, help="Enable defaults")
     args = parser.parse_args()
@@ -556,6 +655,7 @@ if __name__ == "__main__":
         mountpoints=args.mountpoints,
         interfaces=args.interfaces,
         services=args.services,
+        borgmatic_service=args.borgmatic_service,
         state_file=args.state_file
     )
     monitor.run()
