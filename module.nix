@@ -21,7 +21,7 @@ let
   netArgs = lib.optionalString (cfg.interfaces != []) "--interfaces ${lib.escapeShellArgs cfg.interfaces}";
   serviceArgs = lib.optionalString (cfg.services != []) "--services ${lib.escapeShellArgs cfg.services}";
 in {
-  options.module.system2mqtt = with lib; {
+  options.services.system2mqtt = with lib; {
     enable = mkEnableOption "System2MQTT MQTT publisher";
 
     package = mkOption {
