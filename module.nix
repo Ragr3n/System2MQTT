@@ -20,7 +20,6 @@ let
   diskArgs = lib.optionalString (cfg.mountpoints != []) "--mountpoints ${lib.escapeShellArgs cfg.mountpoints}";
   netArgs = lib.optionalString (cfg.interfaces != []) "--interfaces ${lib.escapeShellArgs cfg.interfaces}";
   serviceArgs = lib.optionalString (cfg.services != []) "--services ${lib.escapeShellArgs cfg.services}";
-  borgmaticArg = lib.optionalString (cfg.borgmaticService != null) "--borgmatic-service ${lib.escapeShellArg cfg.borgmaticService}";
 in {
   options.services.system2mqtt = with lib; {
     enable = mkEnableOption "System2MQTT MQTT publisher";
@@ -99,13 +98,6 @@ in {
       description = "Systemd services to monitor";
     };
 
-    borgmaticService = mkOption {
-      type = types.nullOr types.str;
-      default = null;
-      example = "borgmatic.service";
-      description = "Optional systemd borgmatic service to monitor with dedicated sensors";
-    };
-
     stateFile = mkOption {
       type = types.str;
       default = "/var/lib/system2mqtt/state.json";
@@ -175,8 +167,7 @@ in {
           ${lib.optionalString cfg.defaults "--use-defaults"} \
           ${diskArgs} \
           ${netArgs} \
-          ${serviceArgs} \
-          ${borgmaticArg}
+          ${serviceArgs}
       '';
     };
   };
