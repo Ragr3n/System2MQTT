@@ -174,7 +174,7 @@ in {
           ${lib.optionalString cfg.defaults "--use-defaults"} \
           ${diskArgs} \
           ${netArgs} \
-          ${serviceArgs}
+          ${serviceArgs} \
           ${borgmaticArgs}
       '';
     };
