@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Dict, Any
 
 class SystemMonitor:
-    def __init__(self, mqtt_host: str, mqtt_port: int, mqtt_user: str, mqtt_pass: str, use_defaults: bool = True, update_interval: int = 30, mountpoints: list | None = None, interfaces: list | None = None, services: list | None = None, state_file: str | None = None) -> None:
+    def __init__(self, mqtt_host: str, mqtt_port: int, mqtt_user: str, mqtt_pass: str, use_defaults: bool = True, update_interval: int = 30, mountpoints: list | None = None, interfaces: list | None = None, services: list | None = None, borgmatic: list | None = None, state_file: str | None = None) -> None:
         # Initialize logger
         self.logger = logging.getLogger("SystemMonitor")
         
@@ -25,6 +25,7 @@ class SystemMonitor:
         self.mountpoints = mountpoints
         self.interfaces = interfaces
         self.services = services
+        self.borgmatic = borgmatic
         self.state_file = Path(state_file) if state_file else None
 
         # Device info
@@ -214,6 +215,10 @@ class SystemMonitor:
             self.logger.debug(f"Adding service sensors for: {self.services}")
             cmps.update(self._generate_service_sensors())
         
+        if self.borgmatic:
+            self.logger.debug(f"Adding borgmatic sensors for: {self.borgmatic}")
+            cmps.update(self._generate_borgmatic_sensors())
+        
         discovery_payload = {
             "dev": {
                 "identifiers": [self.device_id],
@@ -338,6 +343,32 @@ class SystemMonitor:
                 "state_class": "measurement",
                 "icon": "mdi:harddisk",
                 "value_template": f"{{{{ value_json.disk_total_{mount_safe} }}}}"
+            }
+        return sensors
+
+    def _generate_borgmatic_sensors(self) -> Dict[str, Dict[str, Any]]:
+        """Generate borgmatic sensors for each configured backup."""
+        sensors = {}
+        for repo in self.borgmatic:
+            # Sanitize backup name for unique_id
+            repo_safe = repo.replace('/', '_').replace('-', '_')
+            if not repo_safe:
+                continue
+
+            sensors[f"borgmatic_latest_run_{repo_safe}"] = {
+                "p": "sensor",
+                "name": f"Borgmatic {repo} Last Run",
+                "unique_id": f"{self.device_id}_borgmatic_latest_run_{repo_safe}",
+                "device_class": "timestamp",
+                "icon": "mdi:clock-outline",
+                "value_template": f"{{{{ value_json.borgmatic_latest_run_{repo_safe} }}}}"
+            }
+            sensors[f"borgmatic_latest_state_{repo_safe}"] = {
+                "p": "sensor",
+                "name": f"Borgmatic {repo} Last State",
+                "unique_id": f"{self.device_id}_borgmatic_latest_state_{repo_safe}",
+                "icon": "mdi:harddisk",
+                "value_template": f"{{{{ value_json.borgmatic_latest_state_{repo_safe} }}}}"
             }
         return sensors
 
@@ -542,6 +573,7 @@ if __name__ == "__main__":
     parser.add_argument("--mountpoints", type=str, nargs="+", default=[], help="Disk mountpoints to monitor (default: /)")
     parser.add_argument("--interfaces", type=str, nargs="+", default=[], help="Network interfaces to monitor (e.g. eth0 wlan0)")
     parser.add_argument("--services", type=str, nargs="+", default=[], help="Systemd services to monitor (e.g. nginx.service docker.service)")
+    parser.add_argument("--borgmatic", type=str, nargs="+", default=[], help="Borgmatic backups to monitor (e.g. backup1 backup2)")
     parser.add_argument("--state-file", default="/var/lib/system2mqtt/state.json", help="Path to discovery state file")
     parser.add_argument("--use-defaults", action="store_true", default=True, help="Enable defaults")
     args = parser.parse_args()
@@ -556,6 +588,7 @@ if __name__ == "__main__":
         mountpoints=args.mountpoints,
         interfaces=args.interfaces,
         services=args.services,
+        borgmatic=args.borgmatic,
         state_file=args.state_file
     )
     monitor.run()
