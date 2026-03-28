@@ -9,6 +9,11 @@
           pkgs = import nixpkgs { inherit system; };
           python = pkgs.python3;
           pythonPackages = python.pkgs;
+          pythonEnv = python.withPackages (ps: [
+            ps.psutil
+            ps.paho-mqtt
+            ps.dbus-python
+          ]);
         in {
           packages = {
             system2mqtt = pkgs.stdenvNoCC.mkDerivation {
@@ -17,8 +22,22 @@
               src = self;
               dontBuild = true;
               installPhase = ''
+                mkdir -p $out/bin
                 mkdir -p $out/share/system2mqtt
-                cp ${./system_monitor.py} $out/share/system2mqtt/system_monitor.py
+                install -m755 ${./system2mqtt.py} $out/share/system2mqtt/system2mqtt.py
+                install -m755 ${./borgmatic_update_mqtt.py} $out/share/system2mqtt/borgmatic_update_mqtt.py
+
+                cat > $out/bin/system2mqtt <<'EOF'
+                #!${pkgs.runtimeShell}
+                exec ${pythonEnv}/bin/python $out/share/system2mqtt/system2mqtt.py "$@"
+                EOF
+                chmod +x $out/bin/system2mqtt
+
+                cat > $out/bin/borgmatic-update-mqtt <<'EOF'
+                #!${pkgs.runtimeShell}
+                exec ${pythonEnv}/bin/python $out/share/system2mqtt/borgmatic_update_mqtt.py "$@"
+                EOF
+                chmod +x $out/bin/borgmatic-update-mqtt
               '';
             };
             default = self.packages.${system}.system2mqtt;

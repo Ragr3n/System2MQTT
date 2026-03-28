@@ -2,25 +2,34 @@
 
 let
   cfg = config.services.system2mqtt;
+  pythonEnv = pkgs.python3.withPackages (ps: [
+    ps.psutil
+    ps.paho-mqtt
+  ]);
   defaultPackage = pkgs.stdenvNoCC.mkDerivation {
     pname = "system2mqtt";
     version = "1.0.1";
     src = ./.;
     dontBuild = true;
-    nativeBuildInputs = [ pkgs.makeWrapper ];
     installPhase = ''
-      mkdir -p $out/share/system2mqtt $out/bin
-      cp ${./system2mqtt.py} $out/share/system2mqtt/system2mqtt.py
-      cp ${./borgmatic_update_mqtt.py} $out/share/system2mqtt/borgmatic_update_mqtt.py
-      makeWrapper ${pythonEnv}/bin/python $out/bin/borgmatic-update-mqtt \
-        --add-flags "${./borgmatic_update_mqtt.py}"
+      mkdir -p $out/bin
+      mkdir -p $out/share/system2mqtt
+      install -m755 ${./system2mqtt.py} $out/share/system2mqtt/system2mqtt.py
+      install -m755 ${./borgmatic_update_mqtt.py} $out/share/system2mqtt/borgmatic_update_mqtt.py
 
+      cat > $out/bin/system2mqtt <<'EOF'
+      #!${pkgs.runtimeShell}
+      exec ${pythonEnv}/bin/python $out/share/system2mqtt/system2mqtt.py "$@"
+      EOF
+      chmod +x $out/bin/system2mqtt
+
+      cat > $out/bin/borgmatic-update-mqtt <<'EOF'
+      #!${pkgs.runtimeShell}
+      exec ${pythonEnv}/bin/python $out/share/system2mqtt/borgmatic_update_mqtt.py "$@"
+      EOF
+      chmod +x $out/bin/borgmatic-update-mqtt
     '';
   };
-  pythonEnv = pkgs.python3.withPackages (ps: [
-    ps.psutil
-    ps.paho-mqtt
-  ]);
   scriptPath = "${cfg.package}/share/system2mqtt/system2mqtt.py";
   diskArgs = lib.optionalString (cfg.mountpoints != []) "--mountpoints ${lib.escapeShellArgs cfg.mountpoints}";
   netArgs = lib.optionalString (cfg.interfaces != []) "--interfaces ${lib.escapeShellArgs cfg.interfaces}";
@@ -33,7 +42,7 @@ in {
     package = mkOption {
       type = types.package;
       default = defaultPackage;
-      description = "Package providing system2mqtt.py";
+      description = "Package providing system2mqtt and borgmatic-update-mqtt executables";
     };
 
     mqtt = mkOption {
@@ -147,7 +156,7 @@ in {
     users.groups = lib.mkIf cfg.createUser {
       ${cfg.group} = {};
     };
-
+    environment.systemPackages = [ cfg.package ];
     systemd.services.system2mqtt = {
       description = "System2MQTT MQTT publisher";
       after = [ "network-online.target" ];
