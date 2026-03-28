@@ -2,10 +2,6 @@
 
 let
   cfg = config.services.system2mqtt;
-  pythonEnv = pkgs.python3.withPackages (ps: [
-    ps.psutil
-    ps.paho-mqtt
-  ]);
   defaultPackage = pkgs.stdenvNoCC.mkDerivation {
     pname = "system2mqtt";
     version = "1.0.1";
@@ -15,22 +11,15 @@ let
       mkdir -p $out/bin
       mkdir -p $out/share/system2mqtt
       install -m755 ${./system2mqtt.py} $out/share/system2mqtt/system2mqtt.py
-      install -m755 ${./borgmatic_update_mqtt.py} $out/share/system2mqtt/borgmatic_update_mqtt.py
 
       cat > $out/bin/system2mqtt <<'EOF'
       #!${pkgs.runtimeShell}
-      exec ${pythonEnv}/bin/python $out/share/system2mqtt/system2mqtt.py "$@"
+      exec ${pkgs.python3.withPackages (ps: [ ps.psutil ps.paho-mqtt ])}/bin/python $out/share/system2mqtt/system2mqtt.py "$@"
       EOF
       chmod +x $out/bin/system2mqtt
-
-      cat > $out/bin/borgmatic-update-mqtt <<'EOF'
-      #!${pkgs.runtimeShell}
-      exec ${pythonEnv}/bin/python $out/share/system2mqtt/borgmatic_update_mqtt.py "$@"
-      EOF
-      chmod +x $out/bin/borgmatic-update-mqtt
     '';
   };
-  scriptPath = "${cfg.package}/share/system2mqtt/system2mqtt.py";
+  scriptPath = "${cfg.package}/bin/system2mqtt";
   diskArgs = lib.optionalString (cfg.mountpoints != []) "--mountpoints ${lib.escapeShellArgs cfg.mountpoints}";
   netArgs = lib.optionalString (cfg.interfaces != []) "--interfaces ${lib.escapeShellArgs cfg.interfaces}";
   serviceArgs = lib.optionalString (cfg.services != []) "--services ${lib.escapeShellArgs cfg.services}";
@@ -42,7 +31,7 @@ in {
     package = mkOption {
       type = types.package;
       default = defaultPackage;
-      description = "Package providing system2mqtt and borgmatic-update-mqtt executables";
+      description = "Package providing the system2mqtt executable";
     };
 
     mqtt = mkOption {
@@ -156,7 +145,7 @@ in {
     users.groups = lib.mkIf cfg.createUser {
       ${cfg.group} = {};
     };
-    environment.systemPackages = [ cfg.package ];
+    environment.systemPackages = [ pkgs.borgmatic-update-mqtt ];
     systemd.services.system2mqtt = {
       description = "System2MQTT MQTT publisher";
       after = [ "network-online.target" ];
@@ -178,7 +167,7 @@ in {
           then "$(cat $CREDENTIALS_DIRECTORY/mqtt_password)"
           else lib.escapeShellArg cfg.mqtt.password;
       in ''
-        exec ${pythonEnv}/bin/python ${scriptPath} \
+        exec ${scriptPath} \
           --host ${lib.escapeShellArg cfg.mqtt.host} \
           --port ${toString cfg.mqtt.port} \
           --user ${lib.escapeShellArg cfg.mqtt.user} \

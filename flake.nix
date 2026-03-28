@@ -9,36 +9,61 @@
           pkgs = import nixpkgs { inherit system; };
           python = pkgs.python3;
           pythonPackages = python.pkgs;
-          pythonEnv = python.withPackages (ps: [
-            ps.psutil
-            ps.paho-mqtt
-            ps.dbus-python
-          ]);
-        in {
-          packages = {
-            system2mqtt = pkgs.stdenvNoCC.mkDerivation {
-              pname = "system2mqtt";
+          mkPythonScriptPackage = {
+            pname,
+            scriptFile,
+            scriptName,
+            pythonDeps,
+          }:
+            let
+              pythonEnv = python.withPackages pythonDeps;
+            in pkgs.stdenvNoCC.mkDerivation {
+              inherit pname;
               version = "1.0.1";
               src = self;
               dontBuild = true;
               installPhase = ''
                 mkdir -p $out/bin
-                mkdir -p $out/share/system2mqtt
-                install -m755 ${./system2mqtt.py} $out/share/system2mqtt/system2mqtt.py
-                install -m755 ${./borgmatic_update_mqtt.py} $out/share/system2mqtt/borgmatic_update_mqtt.py
+                mkdir -p $out/share/${pname}
+                install -m755 ${scriptFile} $out/share/${pname}/${scriptName}.py
 
-                cat > $out/bin/system2mqtt <<'EOF'
+                cat > $out/bin/${scriptName} <<'EOF'
                 #!${pkgs.runtimeShell}
-                exec ${pythonEnv}/bin/python $out/share/system2mqtt/system2mqtt.py "$@"
+                exec ${pythonEnv}/bin/python $out/share/${pname}/${scriptName}.py "$@"
                 EOF
-                chmod +x $out/bin/system2mqtt
-
-                cat > $out/bin/borgmatic-update-mqtt <<'EOF'
-                #!${pkgs.runtimeShell}
-                exec ${pythonEnv}/bin/python $out/share/system2mqtt/borgmatic_update_mqtt.py "$@"
-                EOF
-                chmod +x $out/bin/borgmatic-update-mqtt
+                chmod +x $out/bin/${scriptName}
               '';
+            };
+
+          system2mqttPkg = mkPythonScriptPackage {
+            pname = "system2mqtt";
+            scriptFile = ./system2mqtt.py;
+            scriptName = "system2mqtt";
+            pythonDeps = ps: [
+              ps.psutil
+              ps.paho-mqtt
+              ps.dbus-python
+            ];
+          };
+
+          borgmaticUpdateMqttPkg = mkPythonScriptPackage {
+            pname = "borgmatic-update-mqtt";
+            scriptFile = ./borgmatic_update_mqtt.py;
+            scriptName = "borgmatic-update-mqtt";
+            pythonDeps = ps: [
+              ps.paho-mqtt
+            ];
+          };
+        in {
+          packages = {
+            system2mqtt = system2mqttPkg;
+            borgmatic-update-mqtt = borgmaticUpdateMqttPkg;
+            system2mqtt-bundle = pkgs.symlinkJoin {
+              name = "system2mqtt-bundle-1.0.1";
+              paths = [
+                system2mqttPkg
+                borgmaticUpdateMqttPkg
+              ];
             };
             default = self.packages.${system}.system2mqtt;
           };
