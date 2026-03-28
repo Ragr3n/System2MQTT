@@ -7,10 +7,13 @@ let
     version = "1.0.1";
     src = ./.;
     dontBuild = true;
+    nativeBuildInputs = [ pkgs.makeWrapper ];
     installPhase = ''
-      mkdir -p $out/share/system2mqtt
+      mkdir -p $out/share/system2mqtt $out/bin
       cp ${./system2mqtt.py} $out/share/system2mqtt/system2mqtt.py
       cp ${./borgmatic_update_mqtt.py} $out/share/system2mqtt/borgmatic_update_mqtt.py
+      makeWrapper ${pythonEnv}/bin/python $out/bin/borgmatic-update-mqtt \
+        --add-flags "$out/share/system2mqtt/borgmatic_update_mqtt.py"
 
     '';
   };
@@ -19,7 +22,6 @@ let
     ps.paho-mqtt
   ]);
   scriptPath = "${cfg.package}/share/system2mqtt/system2mqtt.py";
-  borgmaticScriptPath = "${cfg.package}/share/system2mqtt/borgmatic_update_mqtt.py";
   diskArgs = lib.optionalString (cfg.mountpoints != []) "--mountpoints ${lib.escapeShellArgs cfg.mountpoints}";
   netArgs = lib.optionalString (cfg.interfaces != []) "--interfaces ${lib.escapeShellArgs cfg.interfaces}";
   serviceArgs = lib.optionalString (cfg.services != []) "--services ${lib.escapeShellArgs cfg.services}";
