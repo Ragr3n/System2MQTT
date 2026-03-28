@@ -13,7 +13,7 @@ let
       cp ${./system2mqtt.py} $out/share/system2mqtt/system2mqtt.py
       cp ${./borgmatic_update_mqtt.py} $out/share/system2mqtt/borgmatic_update_mqtt.py
       makeWrapper ${pythonEnv}/bin/python $out/bin/borgmatic-update-mqtt \
-        --add-flags "$out/share/system2mqtt/borgmatic_update_mqtt.py"
+        --add-flags "${./borgmatic_update_mqtt.py}"
 
     '';
   };
