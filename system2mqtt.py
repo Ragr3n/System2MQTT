@@ -358,7 +358,7 @@ class SystemMonitor:
 
             sensors[f"borgmatic_latest_state_{repo_safe}"] = {
                 "p": "sensor",
-                "name": f"Borgmatic {repo} Last State",
+                "name": f"Borgmatic {repo.capitalize()} Last State",
                 "unique_id": f"{self.device_id}_borgmatic_latest_state_{repo_safe}",
                 "icon": "mdi:harddisk",
                 "state_topic": repo_topic,
