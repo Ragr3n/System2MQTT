@@ -356,15 +356,6 @@ class SystemMonitor:
                 continue
             repo_topic = f"{self.base_topic}/borgmatic_state/{repo_safe}"
 
-            sensors[f"borgmatic_latest_run_{repo_safe}"] = {
-                "p": "sensor",
-                "name": f"Borgmatic {repo} Last Run",
-                "unique_id": f"{self.device_id}_borgmatic_latest_run_{repo_safe}",
-                "device_class": "timestamp",
-                "icon": "mdi:clock-outline",
-                "state_topic": repo_topic,
-                "value_template": f"{{{{ value_json.borgmatic_latest_run_{repo_safe} }}}}"
-            }
             sensors[f"borgmatic_latest_state_{repo_safe}"] = {
                 "p": "sensor",
                 "name": f"Borgmatic {repo} Last State",

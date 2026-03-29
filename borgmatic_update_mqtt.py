@@ -4,7 +4,6 @@ import argparse
 import json
 import logging
 import socket
-from datetime import datetime, timezone
 
 import paho.mqtt.client as mqtt
 
@@ -13,37 +12,9 @@ def sanitize_repo(repo: str) -> str:
     return repo.replace('/', '_').replace('-', '_')
 
 
-def normalize_timestamp(value: str | None) -> str:
-    if not value:
-        dt = datetime.now(timezone.utc)
-        return dt.isoformat().replace('+00:00', 'Z')
-
-    stripped = value.strip()
-
-    try:
-        epoch = float(stripped)
-        dt = datetime.fromtimestamp(epoch, tz=timezone.utc)
-        return dt.isoformat().replace('+00:00', 'Z')
-    except ValueError:
-        pass
-
-    iso_candidate = stripped.replace('Z', '+00:00')
-    try:
-        dt = datetime.fromisoformat(iso_candidate)
-    except ValueError as exc:
-        raise ValueError(
-            'Invalid timestamp. Use ISO-8601 (e.g. 2026-03-27T14:52:01Z) or unix epoch seconds.'
-        ) from exc
-
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-
-    return dt.isoformat().replace('+00:00', 'Z')
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description='Update borgmatic_latest_run_* and borgmatic_latest_state_* via MQTT'
+        description='Update borgmatic_latest_state_* via MQTT'
     )
     parser.add_argument('--host', default='localhost', help='MQTT broker host')
     parser.add_argument('--port', type=int, default=1883, help='MQTT broker port')
@@ -64,11 +35,6 @@ def parse_args() -> argparse.Namespace:
         '--state',
         required=True,
         help='Latest borgmatic state (e.g. running, completed, error)',
-    )
-    parser.add_argument(
-        '--run-timestamp',
-        default=None,
-        help='Run timestamp in ISO-8601 or unix epoch seconds (default: now UTC)',
     )
     parser.add_argument('--qos', type=int, choices=[0, 1, 2], default=1, help='MQTT QoS')
     parser.add_argument(
@@ -97,15 +63,8 @@ def main() -> int:
         logging.error('Repo value is empty after sanitization')
         return 2
 
-    try:
-        run_timestamp = normalize_timestamp(args.run_timestamp)
-    except ValueError as exc:
-        logging.error(str(exc))
-        return 2
-
     state_topic = f"{args.base_topic}/{args.device_id}/borgmatic_state/{repo_safe}"
     payload = {
-        f"borgmatic_latest_run_{repo_safe}": run_timestamp,
         f"borgmatic_latest_state_{repo_safe}": args.state,
     }
 
