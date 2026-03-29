@@ -27,9 +27,9 @@
                 mkdir -p $out/share/${pname}
                 install -m755 ${scriptFile} $out/share/${pname}/${scriptName}.py
 
-                cat > $out/bin/${scriptName} <<'EOF'
+                cat > $out/bin/${scriptName} <<EOF
                 #!${pkgs.runtimeShell}
-                exec ${pythonEnv}/bin/python $out/share/${pname}/${scriptName}.py "$@"
+                exec ${pythonEnv}/bin/python $out/share/${pname}/${scriptName}.py "\$@"
                 EOF
                 chmod +x $out/bin/${scriptName}
               '';
