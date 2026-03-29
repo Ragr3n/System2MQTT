@@ -145,7 +145,6 @@ in {
     users.groups = lib.mkIf cfg.createUser {
       ${cfg.group} = {};
     };
-    environment.systemPackages = [ pkgs.borgmatic-update-mqtt ];
     systemd.services.system2mqtt = {
       description = "System2MQTT MQTT publisher";
       after = [ "network-online.target" ];
