@@ -103,7 +103,7 @@ def main() -> int:
         logging.error(str(exc))
         return 2
 
-    state_topic = f"{args.base_topic}/{args.device_id}/borgmatic_state"
+    state_topic = f"{args.base_topic}/{args.device_id}/borgmatic_state/{repo_safe}"
     payload = {
         f"borgmatic_latest_run_{repo_safe}": run_timestamp,
         f"borgmatic_latest_state_{repo_safe}": args.state,

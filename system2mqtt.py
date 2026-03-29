@@ -44,7 +44,6 @@ class SystemMonitor:
         self.base_topic = f"system2mqtt/{self.device_id}"
         self.availability_topic = f"{self.base_topic}/availability"
         self.state_topic = f"{self.base_topic}/state"
-        self.borgmatic_state_topic = f"{self.base_topic}/borgmatic_state"
         self.discovery_payload = self._generate_discovery_payload()
 
         # Network I/O tracking for rate calculations
@@ -355,6 +354,7 @@ class SystemMonitor:
             repo_safe = repo.replace('/', '_').replace('-', '_')
             if not repo_safe:
                 continue
+            repo_topic = f"{self.base_topic}/borgmatic_state/{repo_safe}"
 
             sensors[f"borgmatic_latest_run_{repo_safe}"] = {
                 "p": "sensor",
@@ -362,7 +362,7 @@ class SystemMonitor:
                 "unique_id": f"{self.device_id}_borgmatic_latest_run_{repo_safe}",
                 "device_class": "timestamp",
                 "icon": "mdi:clock-outline",
-                "state_topic": self.borgmatic_state_topic,
+                "state_topic": repo_topic,
                 "value_template": f"{{{{ value_json.borgmatic_latest_run_{repo_safe} }}}}"
             }
             sensors[f"borgmatic_latest_state_{repo_safe}"] = {
@@ -370,7 +370,7 @@ class SystemMonitor:
                 "name": f"Borgmatic {repo} Last State",
                 "unique_id": f"{self.device_id}_borgmatic_latest_state_{repo_safe}",
                 "icon": "mdi:harddisk",
-                "state_topic": self.borgmatic_state_topic,
+                "state_topic": repo_topic,
                 "value_template": f"{{{{ value_json.borgmatic_latest_state_{repo_safe} }}}}"
             }
         return sensors
