@@ -22,6 +22,7 @@
               version = "1.0.1";
               src = self;
               dontBuild = true;
+              meta.mainProgram = scriptName;
               installPhase = ''
                 mkdir -p $out/bin
                 mkdir -p $out/share/${pname}
