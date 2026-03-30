@@ -4,6 +4,7 @@ import argparse
 import json
 import logging
 import socket
+from pathlib import Path
 
 import paho.mqtt.client as mqtt
 
@@ -20,6 +21,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--port', type=int, default=1883, help='MQTT broker port')
     parser.add_argument('--user', default='', help='MQTT username')
     parser.add_argument('--pass', dest='password', default='', help='MQTT password')
+    parser.add_argument(
+        '--pass-file',
+        dest='password_file',
+        default='',
+        help='Read MQTT password from file',
+    )
     parser.add_argument(
         '--device-id',
         default=socket.gethostname().replace('.', '_').replace('-', '_'),
@@ -68,9 +75,17 @@ def main() -> int:
         f"borgmatic_latest_state_{repo_safe}": args.state,
     }
 
+    password = args.password
+    if args.password_file:
+        try:
+            password = Path(args.password_file).read_text(encoding='utf-8').strip()
+        except OSError as exc:
+            logging.error('Failed to read MQTT password file %s: %s', args.password_file, exc)
+            return 2
+
     client = mqtt.Client(client_id=f"borgmatic_update_{args.device_id}_{repo_safe}")
     if args.user:
-        client.username_pw_set(args.user, args.password)
+        client.username_pw_set(args.user, password)
 
     try:
         logging.info('Connecting to MQTT broker %s:%s', args.host, args.port)

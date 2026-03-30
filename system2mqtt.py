@@ -563,6 +563,7 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=1883, help="MQTT broker port (default: 1883)")
     parser.add_argument("--user", default="", help="MQTT username")
     parser.add_argument("--pass", dest="password", default="", help="MQTT password")
+    parser.add_argument("--pass-file", dest="password_file", default="", help="Read MQTT password from file")
     parser.add_argument("--interval", type=int, default=30, help="Update interval in seconds (default: 30)")
     parser.add_argument("--mountpoints", type=str, nargs="+", default=[], help="Disk mountpoints to monitor (default: /)")
     parser.add_argument("--interfaces", type=str, nargs="+", default=[], help="Network interfaces to monitor (e.g. eth0 wlan0)")
@@ -572,11 +573,19 @@ if __name__ == "__main__":
     parser.add_argument("--use-defaults", action="store_true", default=True, help="Enable defaults")
     args = parser.parse_args()
     
+    password = args.password
+    if args.password_file:
+        try:
+            password = Path(args.password_file).read_text(encoding='utf-8').strip()
+        except OSError as exc:
+            logging.error('Failed to read MQTT password file %s: %s', args.password_file, exc)
+            raise SystemExit(2)
+    
     monitor = SystemMonitor(
         mqtt_host=args.host,
         mqtt_port=args.port,
         mqtt_user=args.user,
-        mqtt_pass=args.password,
+        mqtt_pass=password,
         use_defaults=args.use_defaults,
         update_interval=args.interval,
         mountpoints=args.mountpoints,
