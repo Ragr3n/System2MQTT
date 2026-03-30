@@ -81,6 +81,9 @@
           };
         }
       ) // {
-        nixosModules.system2mqtt = import ./module.nix;
+        nixosModules.system2mqtt = { pkgs, ... }@args: import ./module.nix (args // {
+          system2mqttPackage = self.packages.${pkgs.system}.system2mqtt;
+          borgmaticUpdateMqttPackage = self.packages.${pkgs.system}."borgmatic-update-mqtt";
+        });
       };
 }

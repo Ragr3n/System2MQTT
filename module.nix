@@ -1,41 +1,8 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, pkgs, system2mqttPackage ? null, borgmaticUpdateMqttPackage ? null, ... }:
 
 let
   cfg = config.services.system2mqtt;
-  defaultPackage = pkgs.stdenvNoCC.mkDerivation {
-    pname = "system2mqtt";
-    version = "1.0.1";
-    src = ./.;
-    dontBuild = true;
-    installPhase = ''
-      mkdir -p $out/bin
-      mkdir -p $out/share/system2mqtt
-      install -m755 ${./system2mqtt.py} $out/share/system2mqtt/system2mqtt.py
 
-      cat > $out/bin/system2mqtt <<EOF
-      #!${pkgs.runtimeShell}
-      exec ${pkgs.python3.withPackages (ps: [ ps.psutil ps.paho-mqtt ])}/bin/python $out/share/system2mqtt/system2mqtt.py "\$@"
-      EOF
-      chmod +x $out/bin/system2mqtt
-    '';
-  };
-  defaultBorgmaticPackage = pkgs.stdenvNoCC.mkDerivation {
-    pname = "borgmatic-update-mqtt";
-    version = "1.0.1";
-    src = ./.;
-    dontBuild = true;
-    installPhase = ''
-      mkdir -p $out/bin
-      mkdir -p $out/share/borgmatic-update-mqtt
-      install -m755 ${./borgmatic_update_mqtt.py} $out/share/borgmatic-update-mqtt/borgmatic-update-mqtt.py
-
-      cat > $out/bin/borgmatic-update-mqtt <<EOF
-      #!${pkgs.runtimeShell}
-      exec ${pkgs.python3.withPackages (ps: [ ps.paho-mqtt ])}/bin/python $out/share/borgmatic-update-mqtt/borgmatic-update-mqtt.py "\$@"
-      EOF
-      chmod +x $out/bin/borgmatic-update-mqtt
-    '';
-  };
   scriptPath = "${cfg.package}/bin/system2mqtt";
   diskArgs = lib.optionalString (cfg.mountpoints != []) "--mountpoints ${lib.escapeShellArgs cfg.mountpoints}";
   netArgs = lib.optionalString (cfg.interfaces != []) "--interfaces ${lib.escapeShellArgs cfg.interfaces}";
@@ -47,7 +14,7 @@ in {
 
     package = mkOption {
       type = types.package;
-      default = defaultPackage;
+      default = system2mqttPackage;
       description = "Package providing the system2mqtt executable";
     };
 
@@ -162,7 +129,7 @@ in {
     users.groups = lib.mkIf cfg.createUser {
       ${cfg.group} = {};
     };
-    environment.systemPackages = [ defaultBorgmaticPackage ];
+    environment.systemPackages = [ pkgs.borgmatic-update-mqtt ];
     systemd.services.system2mqtt = {
       description = "System2MQTT MQTT publisher";
       after = [ "network-online.target" ];
