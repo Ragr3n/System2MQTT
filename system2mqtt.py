@@ -361,7 +361,7 @@ class SystemMonitor:
                 "p": "sensor",
                 "name": f"Backup {repo_label}",
                 "unique_id": f"{self.device_id}_backup_state_{repo_safe}",
-                "icon": "mdi:harddisk",
+                "icon": "mdi:cloud-upload",
                 "state_topic": repo_topic,
                 "value_template": f"{{{{ value_json.backup_state_{repo_safe} }}}}"
             }
