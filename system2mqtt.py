@@ -354,15 +354,16 @@ class SystemMonitor:
             repo_safe = repo.replace('/', '_').replace('-', '_')
             if not repo_safe:
                 continue
+            repo_label = repo.replace('_', ' ').title()
             repo_topic = f"{self.base_topic}/borgmatic_state/{repo_safe}"
 
-            sensors[f"borgmatic_latest_state_{repo_safe}"] = {
+            sensors[f"backup_state_{repo_safe}"] = {
                 "p": "sensor",
-                "name": f"Borgmatic {repo.capitalize()} Last State",
-                "unique_id": f"{self.device_id}_borgmatic_latest_state_{repo_safe}",
+                "name": f"Backup {repo_label}",
+                "unique_id": f"{self.device_id}_backup_state_{repo_safe}",
                 "icon": "mdi:harddisk",
                 "state_topic": repo_topic,
-                "value_template": f"{{{{ value_json.borgmatic_latest_state_{repo_safe} }}}}"
+                "value_template": f"{{{{ value_json.backup_state_{repo_safe} }}}}"
             }
         return sensors
 
