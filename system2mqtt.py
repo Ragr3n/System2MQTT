@@ -7,11 +7,12 @@ import time
 import argparse
 import logging
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any
 
 class SystemMonitor:
-    def __init__(self, mqtt_host: str, mqtt_port: int, mqtt_user: str, mqtt_pass: str, use_defaults: bool = True, update_interval: int = 30, mountpoints: list | None = None, interfaces: list | None = None, services: list | None = None, borgmatic: list | None = None, state_file: str | None = None) -> None:
+    def __init__(self, mqtt_host: str, mqtt_port: int, mqtt_user: str, mqtt_pass: str, use_defaults: bool = True, update_interval: int = 30, mountpoints: list | None = None, interfaces: list | None = None, services: list | None = None, borgmatic: list | None = None, state_file: str | None = None, borgmatic_interval: int | None = None) -> None:
         # Initialize logger
         self.logger = logging.getLogger("SystemMonitor")
         
@@ -27,6 +28,10 @@ class SystemMonitor:
         self.services = services
         self.borgmatic = borgmatic
         self.state_file = Path(state_file) if state_file else None
+        self.borgmatic_interval = None
+        if self.borgmatic:
+            configured_borgmatic_interval = borgmatic_interval if borgmatic_interval is not None else 3600
+            self.borgmatic_interval = max(1, configured_borgmatic_interval)
 
         # Device info
         self.hostname = socket.gethostname()
@@ -53,6 +58,23 @@ class SystemMonitor:
         # Initialize CPU percent to avoid blocking on first call
         if self.use_defaults:
             psutil.cpu_percent(interval=1)
+
+    @staticmethod
+    def _sanitize_borgmatic_repo(repo: str) -> str:
+        return repo.replace('/', '_').replace('-', '_')
+
+    @staticmethod
+    def _bytes_to_megabytes(value: int | float) -> float:
+        return round(value / (1024**2), 2)
+
+    @staticmethod
+    def _parse_iso_datetime(value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
 
     def _get_cpu_temperature(self) -> float | None:
         try:
@@ -348,10 +370,10 @@ class SystemMonitor:
 
     def _generate_borgmatic_sensors(self) -> Dict[str, Dict[str, Any]]:
         """Generate borgmatic sensors for each configured backup."""
-        sensors = {}
+        sensors: Dict[str, Dict[str, Any]] = {}
         for repo in self.borgmatic:
             # Sanitize backup name for unique_id
-            repo_safe = repo.replace('/', '_').replace('-', '_')
+            repo_safe = self._sanitize_borgmatic_repo(repo)
             if not repo_safe:
                 continue
             repo_label = repo.replace('_', ' ').title()
@@ -363,9 +385,161 @@ class SystemMonitor:
                 "unique_id": f"{self.device_id}_backup_state_{repo_safe}",
                 "icon": "mdi:cloud-upload",
                 "state_topic": repo_topic,
-                "value_template": f"{{{{ value_json.backup_state_{repo_safe} }}}}"
+                "value_template": "{{ value_json.backup_state }}"
+            }
+            sensors[f"backup_last_success_{repo_safe}"] = {
+                "p": "sensor",
+                "name": f"Backup {repo_label} Last Success",
+                "unique_id": f"{self.device_id}_backup_last_success_{repo_safe}",
+                "icon": "mdi:calendar-check",
+                "device_class": "timestamp",
+                "state_topic": repo_topic,
+                "value_template": "{{ value_json.last_success }}"
+            }
+            sensors[f"backup_age_hours_{repo_safe}"] = {
+                "p": "sensor",
+                "name": f"Backup {repo_label} Age",
+                "unique_id": f"{self.device_id}_backup_age_hours_{repo_safe}",
+                "unit_of_measurement": "h",
+                "state_class": "measurement",
+                "icon": "mdi:clock-alert-outline",
+                "state_topic": repo_topic,
+                "value_template": "{{ value_json.backup_age_hours }}"
+            }
+            sensors[f"backup_duration_seconds_{repo_safe}"] = {
+                "p": "sensor",
+                "name": f"Backup {repo_label} Duration",
+                "unique_id": f"{self.device_id}_backup_duration_seconds_{repo_safe}",
+                "unit_of_measurement": "s",
+                "state_class": "measurement",
+                "icon": "mdi:timer-outline",
+                "state_topic": repo_topic,
+                "value_template": "{{ value_json.duration_seconds }}"
+            }
+            sensors[f"backup_files_count_{repo_safe}"] = {
+                "p": "sensor",
+                "name": f"Backup {repo_label} Files",
+                "unique_id": f"{self.device_id}_backup_files_count_{repo_safe}",
+                "state_class": "measurement",
+                "icon": "mdi:file-multiple",
+                "state_topic": repo_topic,
+                "value_template": "{{ value_json.files_count }}"
+            }
+            sensors[f"backup_original_size_mb_{repo_safe}"] = {
+                "p": "sensor",
+                "name": f"Backup {repo_label} Original Size",
+                "unique_id": f"{self.device_id}_backup_original_size_mb_{repo_safe}",
+                "unit_of_measurement": "MB",
+                "state_class": "measurement",
+                "icon": "mdi:database",
+                "state_topic": repo_topic,
+                "value_template": "{{ value_json.original_size_mb }}"
+            }
+            sensors[f"backup_compressed_size_mb_{repo_safe}"] = {
+                "p": "sensor",
+                "name": f"Backup {repo_label} Compressed Size",
+                "unique_id": f"{self.device_id}_backup_compressed_size_mb_{repo_safe}",
+                "unit_of_measurement": "MB",
+                "state_class": "measurement",
+                "icon": "mdi:archive-arrow-down",
+                "state_topic": repo_topic,
+                "value_template": "{{ value_json.compressed_size_mb }}"
+            }
+            sensors[f"backup_deduplicated_size_mb_{repo_safe}"] = {
+                "p": "sensor",
+                "name": f"Backup {repo_label} Deduplicated Size",
+                "unique_id": f"{self.device_id}_backup_deduplicated_size_mb_{repo_safe}",
+                "unit_of_measurement": "MB",
+                "state_class": "measurement",
+                "icon": "mdi:content-duplicate",
+                "state_topic": repo_topic,
+                "value_template": "{{ value_json.deduplicated_size_mb }}"
+            }
+            sensors[f"backup_repo_last_modified_{repo_safe}"] = {
+                "p": "sensor",
+                "name": f"Backup {repo_label} Repo Last Modified",
+                "unique_id": f"{self.device_id}_backup_repo_last_modified_{repo_safe}",
+                "icon": "mdi:calendar-clock",
+                "device_class": "timestamp",
+                "state_topic": repo_topic,
+                "value_template": "{{ value_json.repo_last_modified }}"
             }
         return sensors
+
+    def _get_borgmatic_state(self, repo: str) -> Dict[str, Any]:
+        try:
+            result = subprocess.run(
+                ["borgmatic", "info", "--archive", "latest", "--repo", repo, "--json"],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            if result.returncode != 0:
+                self.logger.warning(
+                    "borgmatic info failed for %s with code %s: %s",
+                    repo,
+                    result.returncode,
+                    result.stderr.strip()
+                )
+                return {"backup_state": "failed"}
+
+            borgmatic_data = json.loads(result.stdout)
+            if not isinstance(borgmatic_data, list) or not borgmatic_data:
+                self.logger.warning("Unexpected borgmatic payload for %s", repo)
+                return {"backup_state": "unknown"}
+
+            repository_data = borgmatic_data[0]
+            archives = repository_data.get("archives") or []
+            if not archives:
+                return {"backup_state": "missing"}
+
+            latest_archive = archives[-1]
+            archive_stats = latest_archive.get("stats") or {}
+            last_success = latest_archive.get("end") or latest_archive.get("start")
+            last_success_datetime = self._parse_iso_datetime(last_success)
+            backup_age_hours = None
+            if last_success_datetime is not None:
+                backup_age_hours = round((datetime.now() - last_success_datetime).total_seconds() / 3600, 2)
+
+            payload: Dict[str, Any] = {
+                "backup_state": "success",
+            }
+            if last_success:
+                payload["last_success"] = last_success
+            if backup_age_hours is not None:
+                payload["backup_age_hours"] = backup_age_hours
+            if latest_archive.get("duration") is not None:
+                payload["duration_seconds"] = round(float(latest_archive["duration"]), 3)
+            if archive_stats.get("nfiles") is not None:
+                payload["files_count"] = archive_stats["nfiles"]
+            if archive_stats.get("original_size") is not None:
+                payload["original_size_mb"] = self._bytes_to_megabytes(archive_stats["original_size"])
+            if archive_stats.get("compressed_size") is not None:
+                payload["compressed_size_mb"] = self._bytes_to_megabytes(archive_stats["compressed_size"])
+            if archive_stats.get("deduplicated_size") is not None:
+                payload["deduplicated_size_mb"] = self._bytes_to_megabytes(archive_stats["deduplicated_size"])
+            if latest_archive.get("name"):
+                payload["archive_name"] = latest_archive["name"]
+
+            repository_meta = repository_data.get("repository") or {}
+            if repository_meta.get("last_modified"):
+                payload["repo_last_modified"] = repository_meta["last_modified"]
+
+            return payload
+        except (json.JSONDecodeError, OSError, ValueError, subprocess.SubprocessError) as e:
+            self.logger.warning(f"Could not collect borgmatic state for {repo}: {e}")
+            return {"backup_state": "failed"}
+
+    def publish_borgmatic_states(self) -> None:
+        for repo in self.borgmatic or []:
+            repo_safe = self._sanitize_borgmatic_repo(repo)
+            if not repo_safe:
+                continue
+
+            repo_topic = f"{self.base_topic}/borgmatic_state/{repo_safe}"
+            repo_payload = self._get_borgmatic_state(repo)
+            self.logger.debug(f"Publishing borgmatic state to {repo_topic}: {repo_payload}")
+            self.client.publish(repo_topic, json.dumps(repo_payload), qos=1, retain=True)
 
     def _get_component_platforms(self) -> Dict[str, str]:
         return {
@@ -374,7 +548,7 @@ class SystemMonitor:
         }
 
     def _load_previous_components(self) -> Dict[str, str]:
-        if not self.state_file.exists():
+        if not self.state_file or not self.state_file.exists():
             return {}
         try:
             data = json.loads(self.state_file.read_text())
@@ -384,6 +558,8 @@ class SystemMonitor:
             return {}
 
     def _save_current_components(self, components: Dict[str, str]) -> None:
+        if not self.state_file:
+            return
         try:
             self.state_file.parent.mkdir(parents=True, exist_ok=True)
             self.state_file.write_text(json.dumps({"components": components}, indent=2))
@@ -540,8 +716,14 @@ class SystemMonitor:
             self.client.publish(self.availability_topic, "online", retain=True)
             
             self.logger.info(f"Starting monitoring loop with {self.update_interval}s interval")
+            next_borgmatic_publish = 0.0
             while True:
                 self.publish_states()
+                if self.borgmatic and self.borgmatic_interval is not None:
+                    now = time.time()
+                    if now >= next_borgmatic_publish:
+                        self.publish_borgmatic_states()
+                        next_borgmatic_publish = now + self.borgmatic_interval
                 time.sleep(self.update_interval)
         except KeyboardInterrupt:
             self.logger.info("Stopping System2MQTT...")
@@ -570,6 +752,7 @@ if __name__ == "__main__":
     parser.add_argument("--interfaces", type=str, nargs="+", default=[], help="Network interfaces to monitor (e.g. eth0 wlan0)")
     parser.add_argument("--services", type=str, nargs="+", default=[], help="Systemd services to monitor (e.g. nginx.service docker.service)")
     parser.add_argument("--borgmatic", type=str, nargs="+", default=[], help="Borgmatic backups to monitor (e.g. backup1 backup2)")
+    parser.add_argument("--borgmatic-interval", type=int, default=3600, help="Borgmatic update interval in seconds (default: 3600)")
     parser.add_argument("--state-file", default="/var/lib/system2mqtt/state.json", help="Path to discovery state file")
     parser.add_argument("--use-defaults", action="store_true", default=True, help="Enable defaults")
     args = parser.parse_args()
@@ -593,6 +776,7 @@ if __name__ == "__main__":
         interfaces=args.interfaces,
         services=args.services,
         borgmatic=args.borgmatic,
-        state_file=args.state_file
+        state_file=args.state_file,
+        borgmatic_interval=args.borgmatic_interval
     )
     monitor.run()

@@ -72,7 +72,7 @@ def main() -> int:
 
     state_topic = f"{args.base_topic}/{args.device_id}/borgmatic_state/{repo_safe}"
     payload = {
-        f"backup_state_{repo_safe}": args.state,
+        "backup_state": args.state,
     }
 
     password = args.password

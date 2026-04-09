@@ -8,6 +8,7 @@ let
   netArgs = lib.optionalString (cfg.interfaces != []) "--interfaces ${lib.escapeShellArgs cfg.interfaces}";
   serviceArgs = lib.optionalString (cfg.services != []) "--services ${lib.escapeShellArgs cfg.services}";
   borgmaticArgs = lib.optionalString (cfg.borgmatic != []) "--borgmatic ${lib.escapeShellArgs cfg.borgmatic}";
+  borgmaticIntervalArg = lib.optionalString (cfg.borgmatic != []) "--borgmatic-interval ${toString cfg.borgmaticInterval}";
 in {
   options.services.system2mqtt = with lib; {
     enable = mkEnableOption "System2MQTT MQTT publisher";
@@ -92,6 +93,12 @@ in {
       description = "Borgmatic backups to monitor";
     };
 
+    borgmaticInterval = mkOption {
+      type = types.int;
+      default = 3600;
+      description = "How often to refresh borgmatic metrics in seconds";
+    };
+
     stateFile = mkOption {
       type = types.str;
       default = "/var/lib/system2mqtt/state.json";
@@ -162,7 +169,8 @@ in {
           ${diskArgs} \
           ${netArgs} \
           ${serviceArgs} \
-          ${borgmaticArgs}
+          ${borgmaticArgs} \
+          ${borgmaticIntervalArg}
       '';
     };
   };
