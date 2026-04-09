@@ -693,6 +693,9 @@ class SystemMonitor:
             self.logger.info("Connected to MQTT broker")
             self.client.subscribe("homeassistant/status")
             self.publish_discovery()
+            self.publish_states()
+            if self.borgmatic and self.borgmatic_interval is not None:
+                self.publish_borgmatic_states()
         else:
             self.logger.error(f"Failed to connect to MQTT broker: code {rc}")
 
@@ -716,7 +719,7 @@ class SystemMonitor:
             self.client.publish(self.availability_topic, "online", retain=True)
             
             self.logger.info(f"Starting monitoring loop with {self.update_interval}s interval")
-            next_borgmatic_publish = 0.0
+            next_borgmatic_publish = time.time() + self.borgmatic_interval if self.borgmatic_interval is not None else 0.0
             while True:
                 self.publish_states()
                 if self.borgmatic and self.borgmatic_interval is not None:
