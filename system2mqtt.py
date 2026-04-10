@@ -469,7 +469,7 @@ class SystemMonitor:
     def _get_borgmatic_state(self, repo: str) -> Dict[str, Any]:
         try:
             result = subprocess.run(
-                ["borgmatic", "info", "--archive", "latest", "--repo", repo, "--json"],
+                ["sudo","borgmatic", "info", "--archive", "latest", "--repo", repo, "--json"],
                 capture_output=True,
                 text=True,
                 timeout=60
