@@ -7,7 +7,7 @@ import time
 import argparse
 import logging
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any
 
@@ -72,7 +72,10 @@ class SystemMonitor:
         if not value:
             return None
         try:
-            return datetime.fromisoformat(value)
+            parsed = datetime.fromisoformat(value)
+            if parsed.tzinfo is None:
+                return parsed.replace(tzinfo=timezone.utc)
+            return parsed
         except ValueError:
             return None
 
@@ -499,13 +502,14 @@ class SystemMonitor:
             last_success_datetime = self._parse_iso_datetime(last_success)
             backup_age_hours = None
             if last_success_datetime is not None:
-                backup_age_hours = round((datetime.now() - last_success_datetime).total_seconds() / 3600, 2)
+                now = datetime.now(last_success_datetime.tzinfo)
+                backup_age_hours = round((now - last_success_datetime).total_seconds() / 3600, 2)
 
             payload: Dict[str, Any] = {
                 "backup_state": "success",
             }
-            if last_success:
-                payload["last_success"] = last_success
+            if last_success_datetime is not None:
+                payload["last_success"] = last_success_datetime.isoformat(timespec="seconds")
             if backup_age_hours is not None:
                 payload["backup_age_hours"] = backup_age_hours
             if latest_archive.get("duration") is not None:
@@ -522,8 +526,9 @@ class SystemMonitor:
                 payload["archive_name"] = latest_archive["name"]
 
             repository_meta = repository_data.get("repository") or {}
-            if repository_meta.get("last_modified"):
-                payload["repo_last_modified"] = repository_meta["last_modified"]
+            repo_last_modified_datetime = self._parse_iso_datetime(repository_meta.get("last_modified"))
+            if repo_last_modified_datetime is not None:
+                payload["repo_last_modified"] = repo_last_modified_datetime.isoformat(timespec="seconds")
 
             return payload
         except (json.JSONDecodeError, OSError, ValueError, subprocess.SubprocessError) as e:
