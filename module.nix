@@ -136,16 +136,13 @@ in {
     users.groups = lib.mkIf cfg.createUser {
       ${cfg.group} = {};
     };
-    environment.systemPackages = [ borgmaticUpdateMqttPackage pkgs.borgbackup ];
+    environment.systemPackages = [ borgmaticUpdateMqttPackage];
     systemd.services.system2mqtt = {
       description = "System2MQTT MQTT publisher";
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
-      path = [
-        pkgs.borgmatic
-        pkgs.borgbackup
-      ];
+
 
       serviceConfig = {
         Type = "simple";
