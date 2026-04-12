@@ -691,12 +691,13 @@ class SystemMonitor:
                     state_payload[f"service_{service_safe}"] = "unknown"
         
         self.logger.debug(f"Publishing state: {state_payload}")
-        self.client.publish(self.state_topic, json.dumps(state_payload))
+        self.client.publish(self.state_topic, json.dumps(state_payload), qos=1, retain=True)
 
     def on_connect(self, client: mqtt.Client, userdata: Any, flags: Dict[str, int], rc: int) -> None:
         if rc == 0:
             self.logger.info("Connected to MQTT broker")
             self.client.subscribe("homeassistant/status")
+            self.client.publish(self.availability_topic, "online", qos=1, retain=True)
             self.publish_discovery()
             self.publish_states()
             if self.borgmatic and self.borgmatic_interval is not None:
